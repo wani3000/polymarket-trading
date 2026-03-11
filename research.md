@@ -26,6 +26,11 @@
 
 현재 실제 동작이 완성된 쪽은 A이고, B는 구조와 기초 흐름을 잡아 놓은 상태다.
 
+추가 상태 메모:
+
+- 문서 기준선(`README.md`, `research.md`, `plan.md`)이 이제 저장소 루트에 존재한다.
+- 사용자 승인 후 다음 구현 단계는 frontend의 실제 wallet sign-in이다.
+
 ## 2. legacy bot 분석
 
 ### 2.1 진입점과 전체 루프
@@ -279,12 +284,13 @@
 - 랜딩 페이지 존재
 - 대시보드 페이지 존재
 - API health check 가능
-- nonce 요청 / signature verify / session 조회 / bot 생성 / bot 목록 / bot start 흐름 UI 골격 존재
+- wagmi provider와 injected wallet connector 추가
+- nonce 요청 / sign message / verify / session 조회 / bot 생성 / bot 목록 / bot start 흐름 UI 존재
 
 한계:
 
-- 실제 wagmi/viem 월렛 연결은 아직 없음
-- 서명은 수동 입력 전제
+- worker runtime과 아직 연결되지 않음
+- 실제 브라우저 실행 검증은 아직 안 함
 - 스타일은 기본 MVP 수준
 
 ### 3.2 api
@@ -326,12 +332,15 @@
 - `worker/app/runtime/manager.py`
 - `worker/app/runtime/runtime.py`
 - `worker/app/strategies/market_follow.py`
+- `worker/app/execution/paper_executor.py`
 
 현재 상태:
 
-- 구조만 있음
-- runtime manager는 시작점 역할만 정의
-- `MarketFollowStrategy` 는 인터페이스만 존재
+- runtime manager singleton 존재
+- API route에서 runtime manager를 직접 호출하는 방식으로 연결됨
+- bot start 시 background thread가 생성되고 5초마다 heartbeat를 남김
+- run status와 event log를 DB에 기록
+- `PaperExecutor` 는 매우 얇은 placeholder 상태
 - 실제 market data / order execution 연결 없음
 
 ### 3.4 shared
@@ -438,12 +447,16 @@
   - `docs/WEBAPP_ARCHITECTURE.md`
   - `docs/MIGRATION_PLAN.md`
 - API는 더 이상 완전한 스텁이 아니고, SQLite persistence 초안이 들어갔다
-- frontend는 완전한 월렛 연결은 아니지만, API 흐름을 따라가는 MVP 대시보드가 있다
+- frontend는 wagmi 기반 월렛 연결과 sign message 인증 흐름 초안을 가진다
+- API는 localhost 프론트 연결을 위한 CORS 설정이 들어갔다
+- worker runtime은 현재 별도 프로세스가 아니라 API 프로세스 내부 background thread MVP로 동작한다
+- run 상태 추적을 위해 `bot_runs.last_heartbeat_at` 와 `event_logs` 테이블이 추가되었다
+- 문서 기준선 파일(`README.md`, `research.md`, `plan.md`)이 추가되었고, 이후 작업은 이 문서를 기준으로 진행해야 한다
 
 ### 아직 틀리거나 미완인 부분
 
-- worker는 거의 비어 있다
-- frontend는 실제 wallet SDK 연결이 없다
+- worker는 시장 데이터와 주문 실행이 아직 비어 있다
+- frontend는 wallet SDK 연결 초안이 있으나 실제 브라우저 검증은 안 했다
 - API signature verify는 코드상 존재하지만, 실실행 검증은 아직 안 했다
 - 저장 계층은 ORM 없이 sqlite3 직접 접근이다
 

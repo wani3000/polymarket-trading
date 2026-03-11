@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -125,10 +126,10 @@ def create_run(bot_id: str, user_id: str, status: str) -> dict:
     with connection_scope() as conn:
         conn.execute(
             """
-            INSERT INTO bot_runs (id, bot_id, user_id, status, started_at, stopped_at)
-            VALUES (?, ?, ?, ?, ?, NULL)
+            INSERT INTO bot_runs (id, bot_id, user_id, status, started_at, stopped_at, last_heartbeat_at)
+            VALUES (?, ?, ?, ?, ?, NULL, ?)
             """,
-            (run_id, bot_id, user_id, status, started_at),
+            (run_id, bot_id, user_id, status, started_at, started_at),
         )
     return {
         "id": run_id,
@@ -137,6 +138,7 @@ def create_run(bot_id: str, user_id: str, status: str) -> dict:
         "status": status,
         "started_at": started_at,
         "stopped_at": None,
+        "last_heartbeat_at": started_at,
     }
 
 
@@ -144,7 +146,7 @@ def list_runs(user_id: str) -> list[dict]:
     with connection_scope() as conn:
         rows = conn.execute(
             """
-            SELECT id, bot_id, user_id, status, started_at, stopped_at
+            SELECT id, bot_id, user_id, status, started_at, stopped_at, last_heartbeat_at
             FROM bot_runs
             WHERE user_id = ?
             ORDER BY started_at DESC
@@ -158,10 +160,116 @@ def get_run(run_id: str, user_id: str) -> dict | None:
     with connection_scope() as conn:
         row = conn.execute(
             """
-            SELECT id, bot_id, user_id, status, started_at, stopped_at
+            SELECT id, bot_id, user_id, status, started_at, stopped_at, last_heartbeat_at
             FROM bot_runs
             WHERE id = ? AND user_id = ?
             """,
             (run_id, user_id),
         ).fetchone()
     return dict(row) if row else None
+
+
+def update_run(
+    run_id: str,
+    user_id: str,
+    *,
+    status: str | None = None,
+    stopped_at: str | None = None,
+    last_heartbeat_at: str | None = None,
+) -> dict | None:
+    current = get_run(run_id, user_id)
+    if current is None:
+        return None
+
+    merged = {
+        **current,
+        "status": status or current["status"],
+        "stopped_at": stopped_at if stopped_at is not None else current["stopped_at"],
+        "last_heartbeat_at": last_heartbeat_at or current["last_heartbeat_at"],
+    }
+    with connection_scope() as conn:
+        conn.execute(
+            """
+            UPDATE bot_runs
+            SET status = ?, stopped_at = ?, last_heartbeat_at = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (
+                merged["status"],
+                merged["stopped_at"],
+                merged["last_heartbeat_at"],
+                run_id,
+                user_id,
+            ),
+        )
+    return get_run(run_id, user_id)
+
+
+def get_latest_run_for_bot(bot_id: str, user_id: str) -> dict | None:
+    with connection_scope() as conn:
+        row = conn.execute(
+            """
+            SELECT id, bot_id, user_id, status, started_at, stopped_at, last_heartbeat_at
+            FROM bot_runs
+            WHERE bot_id = ? AND user_id = ?
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            (bot_id, user_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_event_log(
+    run_id: str,
+    user_id: str,
+    *,
+    level: str,
+    event_type: str,
+    message: str,
+    payload: dict | None = None,
+) -> dict:
+    event_id = str(uuid.uuid4())
+    created_at = _utcnow_iso()
+    row = {
+        "id": event_id,
+        "run_id": run_id,
+        "user_id": user_id,
+        "level": level,
+        "type": event_type,
+        "message": message,
+        "payload_json": json.dumps(payload or {}),
+        "created_at": created_at,
+    }
+    with connection_scope() as conn:
+        conn.execute(
+            """
+            INSERT INTO event_logs (id, run_id, user_id, level, type, message, payload_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row["id"],
+                row["run_id"],
+                row["user_id"],
+                row["level"],
+                row["type"],
+                row["message"],
+                row["payload_json"],
+                row["created_at"],
+            ),
+        )
+    return row
+
+
+def list_events(run_id: str, user_id: str) -> list[dict]:
+    with connection_scope() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, run_id, user_id, level, type, message, payload_json, created_at
+            FROM event_logs
+            WHERE run_id = ? AND user_id = ?
+            ORDER BY created_at DESC
+            """,
+            (run_id, user_id),
+        ).fetchall()
+    return [dict(row) for row in rows]

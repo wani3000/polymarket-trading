@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from api.app.dependencies import current_session
 from api.app.services import bot_service
+from worker.app.runtime.service import get_runtime_manager
 
 router = APIRouter()
 
@@ -70,15 +71,36 @@ def start_bot(bot_id: str, session: dict[str, str] = Depends(current_session)) -
     bot = bot_service.get_bot(bot_id, session["user_id"])
     if bot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found.")
+    runtime_manager = get_runtime_manager()
+    existing_runtime = runtime_manager.get_runtime(bot_id)
+    if existing_runtime:
+        latest_run = bot_service.get_run(existing_runtime["run_id"], session["user_id"])
+        return {
+            "bot_id": bot_id,
+            "status": "already_running",
+            "run": latest_run or existing_runtime,
+        }
+
     bot_service.update_bot(bot_id, session["user_id"], {"status": "active"})
     run = bot_service.create_run(bot_id, session["user_id"], "starting")
-    return {"bot_id": bot_id, "status": "starting", "run": run}
+    runtime_result = runtime_manager.start_runtime(
+        bot_id=bot_id,
+        run_id=run["id"],
+        user_id=session["user_id"],
+        config=bot,
+    )
+    return {"bot_id": bot_id, "status": runtime_result["status"], "run": run}
 
 
 @router.post("/{bot_id}/stop")
-def stop_bot(bot_id: str, session: dict[str, str] = Depends(current_session)) -> dict[str, str]:
+def stop_bot(bot_id: str, session: dict[str, str] = Depends(current_session)) -> dict:
     bot = bot_service.get_bot(bot_id, session["user_id"])
     if bot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found.")
     bot_service.update_bot(bot_id, session["user_id"], {"status": "paused"})
-    return {"bot_id": bot_id, "status": "stopping"}
+    runtime_result = get_runtime_manager().stop_runtime(bot_id)
+    latest_run = bot_service.get_latest_run_for_bot(bot_id, session["user_id"])
+    if latest_run and runtime_result["status"] != "not_running":
+        bot_service.update_run(latest_run["id"], session["user_id"], status="stopping")
+        latest_run = bot_service.get_run(latest_run["id"], session["user_id"])
+    return {"bot_id": bot_id, "status": runtime_result["status"], "run": latest_run}

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
 
 import { apiRequest } from "../lib/api";
 
@@ -34,15 +35,18 @@ type Bot = {
 const SESSION_KEY = "polymarket-web-session";
 
 export function Dashboard() {
-  const [walletAddress, setWalletAddress] = useState("");
   const [message, setMessage] = useState("");
-  const [signature, setSignature] = useState("");
   const [sessionToken, setSessionToken] = useState("");
   const [sessionInfo, setSessionInfo] = useState<SessionResponse | null>(null);
   const [bots, setBots] = useState<Bot[]>([]);
   const [status, setStatus] = useState("API not checked");
   const [error, setError] = useState("");
   const [botName, setBotName] = useState("Market Follow MVP");
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const { address, isConnected } = useAccount();
+  const { connect, connectors, isPending: isConnecting } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { signMessageAsync } = useSignMessage();
 
   useEffect(() => {
     const saved = window.localStorage.getItem(SESSION_KEY);
@@ -57,31 +61,44 @@ export function Dashboard() {
     setStatus(`API: ${data.status}`);
   }
 
-  async function requestNonce(event: FormEvent) {
-    event.preventDefault();
-    setError("");
-    const data = await apiRequest<NonceResponse>("/auth/nonce", {
-      method: "POST",
-      body: JSON.stringify({ wallet_address: walletAddress }),
-    });
-    setMessage(data.message);
-  }
-
   async function verifySignature(event: FormEvent) {
     event.preventDefault();
+    await authenticateWithWallet();
+  }
+
+  async function authenticateWithWallet() {
+    if (!address) {
+      setError("Connect a wallet first.");
+      return;
+    }
+
     setError("");
-    const data = await apiRequest<SessionResponse>("/auth/verify", {
-      method: "POST",
-      body: JSON.stringify({
-        wallet_address: walletAddress,
-        message,
-        signature,
-      }),
-    });
-    const token = data.session ?? "";
-    setSessionToken(token);
-    setSessionInfo(data);
-    window.localStorage.setItem(SESSION_KEY, token);
+    setIsAuthenticating(true);
+    try {
+      const nonce = await apiRequest<NonceResponse>("/auth/nonce", {
+        method: "POST",
+        body: JSON.stringify({ wallet_address: address }),
+      });
+      setMessage(nonce.message);
+
+      const signature = await signMessageAsync({ message: nonce.message });
+      const data = await apiRequest<SessionResponse>("/auth/verify", {
+        method: "POST",
+        body: JSON.stringify({
+          wallet_address: address,
+          message: nonce.message,
+          signature,
+        }),
+      });
+      const token = data.session ?? "";
+      setSessionToken(token);
+      setSessionInfo(data);
+      window.localStorage.setItem(SESSION_KEY, token);
+    } catch (authError) {
+      setError(authError instanceof Error ? authError.message : "Authentication failed.");
+    } finally {
+      setIsAuthenticating(false);
+    }
   }
 
   async function loadSession() {
@@ -130,6 +147,18 @@ export function Dashboard() {
     await loadBots();
   }
 
+  async function logout() {
+    if (!sessionToken) {
+      return;
+    }
+    setError("");
+    await apiRequest("/auth/logout", { method: "POST" }, sessionToken);
+    setSessionToken("");
+    setSessionInfo(null);
+    setBots([]);
+    window.localStorage.removeItem(SESSION_KEY);
+  }
+
   async function startBot(botId: string) {
     if (!sessionToken) {
       setError("Missing session token.");
@@ -161,32 +190,52 @@ export function Dashboard() {
 
       <section className="panel-grid">
         <article className="panel">
-          <h2>1. Request nonce</h2>
-          <form className="stack" onSubmit={requestNonce}>
-            <input
-              placeholder="0x wallet address"
-              value={walletAddress}
-              onChange={(event) => setWalletAddress(event.target.value)}
-            />
-            <button className="cta" type="submit">
-              Issue nonce
-            </button>
-          </form>
-          {message ? <pre className="code">{message}</pre> : null}
+          <h2>1. Wallet</h2>
+          <div className="stack">
+            {isConnected ? (
+              <>
+                <div className="walletCard">
+                  <strong>{address}</strong>
+                  <span className="muted">Connected on Polygon-ready wallet config.</span>
+                </div>
+                <div className="toolbar">
+                  <button className="cta secondary" onClick={() => disconnect()} type="button">
+                    Disconnect
+                  </button>
+                  <button
+                    className="cta"
+                    onClick={authenticateWithWallet}
+                    type="button"
+                    disabled={isAuthenticating}
+                  >
+                    {isAuthenticating ? "Signing..." : "Sign in with wallet"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              connectors.map((connector) => (
+                <button
+                  className="cta"
+                  key={connector.id}
+                  onClick={() => connect({ connector })}
+                  type="button"
+                  disabled={isConnecting}
+                >
+                  Connect {connector.name}
+                </button>
+              ))
+            )}
+          </div>
         </article>
 
         <article className="panel">
-          <h2>2. Verify signature</h2>
+          <h2>2. Auth flow</h2>
           <form className="stack" onSubmit={verifySignature}>
-            <textarea
-              placeholder="Paste wallet signature"
-              value={signature}
-              onChange={(event) => setSignature(event.target.value)}
-            />
             <button className="cta" type="submit">
-              Verify
+              Run nonce + sign + verify
             </button>
           </form>
+          {message ? <pre className="code">{message}</pre> : null}
           {sessionToken ? <pre className="code">{sessionToken}</pre> : null}
         </article>
 
@@ -200,6 +249,9 @@ export function Dashboard() {
             />
             <button className="cta" type="button" onClick={loadSession}>
               Load session
+            </button>
+            <button className="cta secondary" type="button" onClick={logout}>
+              Logout
             </button>
           </div>
           {sessionInfo ? (

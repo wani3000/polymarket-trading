@@ -55,7 +55,7 @@ frontend -> api -> worker -> Polymarket
 
 상태:
 
-- 진행 중인 요청으로 반영 중
+- 완료
 
 ### Phase 1. API 인증과 persistence
 
@@ -128,7 +128,7 @@ def verify_signature(wallet, message, signature):
 현재 상태:
 
 - 수동 입력 기반 대시보드 골격 완료
-- 실제 wallet SDK 연결 미완
+- wagmi/viem 기반 wallet SDK 연결 초안 구현 완료
 
 의사코드:
 
@@ -342,30 +342,61 @@ class BotRuntime:
   - 현재 API persistence 초안과 frontend 대시보드 골격은 이미 존재
   - 이후 변경이 생기면 이 섹션에 이전 판단을 남기고 새 판단을 이어서 기록한다
 
+### Iteration 4
+
+- 사용자 지시:
+  - GitHub 업로드 완료 후 계속 작업을 이어갈 것
+
+- 반영 계획:
+  - 문서 상태를 승인 후 구현 단계로 갱신
+  - frontend에 실제 wallet connect + sign message 흐름 추가
+  - API에 브라우저 연동 보강(CORS) 추가
+
+- 반영 결과:
+  - `frontend/components/providers.tsx` 추가
+  - `frontend/components/dashboard.tsx` 를 수동 서명 입력에서 지갑 서명 흐름으로 변경
+  - `api/app/main.py`, `api/app/config.py` 에 CORS 추가
+
+### Iteration 5
+
+- 작업 내용:
+  - `bot start/stop` 을 실제 runtime 생성/중지와 연결
+
+- 반영 결과:
+  - `worker/app/runtime/service.py` singleton 추가
+  - `worker/app/runtime/manager.py` 에 background thread runtime loop 구현
+  - `worker/app/runtime/runtime.py` 에 heartbeat/event log 기록 추가
+  - `api/app/services/bot_service.py` 에 run update, latest run, event log 저장 추가
+  - `api/app/routes/runs.py` 에 `GET /runs/{run_id}/events` 추가
+
+- 남은 제약:
+  - 현재 runtime은 API 프로세스 내부 thread다
+  - 아직 legacy market/paper/risk 모듈과 연결되지 않았다
+
 ## Todo List
 
 ### 승인 전
 
-- [ ] `README.md` 현재 상태 기준으로 정리 완료
+- [x] `README.md` 현재 상태 기준으로 정리 완료
   - 담당: Codex
-- [ ] `research.md` legacy + new structure 분석 반영
+- [x] `research.md` legacy + new structure 분석 반영
   - 담당: Codex
-- [ ] `plan.md` 구현 순서와 트레이드오프 반영
+- [x] `plan.md` 구현 순서와 트레이드오프 반영
   - 담당: Codex
 
 ### 승인 후 실행
 
-- [ ] frontend에 실제 wagmi/viem 월렛 연결 추가
+- [x] frontend에 실제 wagmi/viem 월렛 연결 추가
   - 담당: Codex
-- [ ] auth verify 흐름을 프론트와 실제 연결
+- [x] auth verify 흐름을 프론트와 실제 연결
   - 담당: Codex
 - [ ] worker runtime에 market_follow 루프 추가
+  - 담당: Codex
+- [x] start/stop API와 worker runtime manager 연결
   - 담당: Codex
 - [ ] legacy `MarketStore`, `PriceHistory` 를 worker로 추출
   - 담당: Codex
 - [ ] paper execution persistence를 API/DB와 연결
-  - 담당: Codex
-- [ ] start/stop API와 worker runtime manager 연결
   - 담당: Codex
 - [ ] markets / positions / orders 조회 API 추가
   - 담당: Codex

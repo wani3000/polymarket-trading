@@ -11,10 +11,10 @@
 현재 우선순위:
 
 1. 문서 기준선 정리
-2. web app 아키텍처 확정
-3. API 인증과 bot persistence 구현
-4. frontend 월렛/대시보드 연결
-5. worker runtime과 paper execution 연결
+2. paper trading end-to-end 완성
+3. legacy market/risk 모듈을 worker로 추출
+4. API 프로세스 내 runtime을 독립 worker로 분리
+5. live trading credential 설계
 
 ## 핵심 디렉토리 구조
 
@@ -71,7 +71,11 @@
   - web app 전환 설계 완료
   - `frontend / api / worker / shared` 골격 생성 완료
   - API의 nonce/session/bot persistence 초안 구현 완료
-  - 추가 구현은 현재 문서 기준선 정리 후 이어갈 예정
+  - 프론트엔드 wagmi 기반 월렛 연결/서명 인증 초안 구현 완료
+  - API CORS 설정 추가 완료
+  - bot start/stop이 in-process worker runtime과 연결됨
+  - run heartbeat/event log 기록이 DB에 반영됨
+  - 현재는 `paper trading 로직을 runtime에 넣는 단계`로 이동
 
 ## 참고 파일 안내
 
@@ -90,7 +94,7 @@
 
 - legacy 봇은 여전히 `src/main.py`로 이해할 수 있다.
 - 새 web app 시작점은 `frontend/`, `api/`, `worker/`, `shared/` 이다.
-- 다음 구현 전에 `plan.md` 승인과 보완을 먼저 반영해야 한다.
+- 현재 worker는 별도 프로세스가 아니라 API 내부 background thread MVP다.
 
 ## 업데이트 규칙
 
