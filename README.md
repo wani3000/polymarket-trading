@@ -11,9 +11,9 @@
 현재 우선순위:
 
 1. 문서 기준선 정리
-2. paper trading end-to-end 완성
-3. legacy market/risk 모듈을 worker로 추출
-4. API 프로세스 내 runtime을 독립 worker로 분리
+2. synthetic paper runtime을 실제 Polymarket market data로 교체
+3. API 프로세스 내 runtime을 독립 worker로 분리
+4. paper trading persistence를 조회 API로 노출
 5. live trading credential 설계
 
 ## 핵심 디렉토리 구조
@@ -75,7 +75,8 @@
   - API CORS 설정 추가 완료
   - bot start/stop이 in-process worker runtime과 연결됨
   - run heartbeat/event log 기록이 DB에 반영됨
-  - 현재는 `paper trading 로직을 runtime에 넣는 단계`로 이동
+  - runtime이 synthetic market feed 기반으로 paper buy/sell 이벤트를 생성함
+  - 현재는 `synthetic runtime을 실제 market data/runtime으로 치환하는 단계`로 이동
 
 ## 참고 파일 안내
 

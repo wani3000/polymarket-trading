@@ -373,6 +373,22 @@ class BotRuntime:
   - 현재 runtime은 API 프로세스 내부 thread다
   - 아직 legacy market/paper/risk 모듈과 연결되지 않았다
 
+### Iteration 6
+
+- 작업 내용:
+  - worker에 최소 market-follow paper runtime을 넣어 synthetic buy/sell 이벤트 생성
+
+- 반영 결과:
+  - `worker/app/market/store.py`, `history.py` 로 worker 전용 market 계층 추가
+  - `worker/app/market/simulator.py` 로 deterministic synthetic feed 추가
+  - `worker/app/strategies/market_follow.py` 에 추세 기반 BUY/SELL signal 구현
+  - `worker/app/execution/paper_executor.py` 에 최소 paper buy/sell/update/summary 구현
+  - `worker/app/runtime/runtime.py` 가 synthetic market tick을 소비하고 paper 이벤트를 기록
+
+- 남은 제약:
+  - 현재는 synthetic feed 기반이다
+  - 실제 Polymarket data source와 risk manager는 아직 runtime에 붙지 않았다
+
 ## Todo List
 
 ### 승인 전
@@ -390,11 +406,11 @@ class BotRuntime:
   - 담당: Codex
 - [x] auth verify 흐름을 프론트와 실제 연결
   - 담당: Codex
-- [ ] worker runtime에 market_follow 루프 추가
+- [x] worker runtime에 market_follow 루프 추가
   - 담당: Codex
 - [x] start/stop API와 worker runtime manager 연결
   - 담당: Codex
-- [ ] legacy `MarketStore`, `PriceHistory` 를 worker로 추출
+- [x] legacy `MarketStore`, `PriceHistory` 를 worker로 추출
   - 담당: Codex
 - [ ] paper execution persistence를 API/DB와 연결
   - 담당: Codex

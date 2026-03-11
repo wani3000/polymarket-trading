@@ -333,6 +333,9 @@
 - `worker/app/runtime/runtime.py`
 - `worker/app/strategies/market_follow.py`
 - `worker/app/execution/paper_executor.py`
+- `worker/app/market/store.py`
+- `worker/app/market/history.py`
+- `worker/app/market/simulator.py`
 
 현재 상태:
 
@@ -340,8 +343,10 @@
 - API route에서 runtime manager를 직접 호출하는 방식으로 연결됨
 - bot start 시 background thread가 생성되고 5초마다 heartbeat를 남김
 - run status와 event log를 DB에 기록
-- `PaperExecutor` 는 매우 얇은 placeholder 상태
-- 실제 market data / order execution 연결 없음
+- worker 전용 `MarketStore`, `PriceHistory` 추출본이 존재
+- synthetic market feed가 seed price path를 흘려 주고, runtime이 이를 이용해 paper buy/sell 이벤트를 만든다
+- `PaperExecutor` 는 최소 buy/sell/update/summary 를 지원한다
+- 실제 Polymarket market data / order execution 연결은 아직 없음
 
 ### 3.4 shared
 
@@ -451,11 +456,12 @@
 - API는 localhost 프론트 연결을 위한 CORS 설정이 들어갔다
 - worker runtime은 현재 별도 프로세스가 아니라 API 프로세스 내부 background thread MVP로 동작한다
 - run 상태 추적을 위해 `bot_runs.last_heartbeat_at` 와 `event_logs` 테이블이 추가되었다
+- worker에는 synthetic market feed와 최소 market-follow paper trading 루프가 들어갔다
 - 문서 기준선 파일(`README.md`, `research.md`, `plan.md`)이 추가되었고, 이후 작업은 이 문서를 기준으로 진행해야 한다
 
 ### 아직 틀리거나 미완인 부분
 
-- worker는 시장 데이터와 주문 실행이 아직 비어 있다
+- worker는 synthetic data로는 동작하지만 실제 Polymarket market data 연결은 아직 없다
 - frontend는 wallet SDK 연결 초안이 있으나 실제 브라우저 검증은 안 했다
 - API signature verify는 코드상 존재하지만, 실실행 검증은 아직 안 했다
 - 저장 계층은 ORM 없이 sqlite3 직접 접근이다
